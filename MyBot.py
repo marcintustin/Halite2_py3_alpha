@@ -36,8 +36,10 @@ while True:
             # Skip this ship
             continue
 
+        # TODO: Most basic enhancement is to consider planets in order of proximity to ship;
+        # TODO: and to have ships target different planets from each other
         # For each planet in the game (only non-destroyed planets are included)
-        for planet in game_map.all_planets():
+        for planet in sorted(game_map.all_planets(), key=ship.calculate_distance_between):
             # TODO: Identify planets that are vulnerable to re-capture
             # If the planet is owned
             if planet.is_owned():
