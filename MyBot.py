@@ -21,17 +21,26 @@ game = hlt.Game("Settler")
 # Then we print our start message to the logs
 logging.info("Starting my Settler bot!")
 
-def planetscore(ship, planet):
+def planetscore(ship, planet, ship_targets):
+    """
+    ship_targets is a map ship -> target_object
+    """
+    count_in_targets = len([target for target in ship_targets.values() if target == planet])
     # higher numbers make a planet LESS desirable
     return (
         1000*int(planet.is_owned())
-        +  ship.calculate_distance_between(planet)
+        + 200*count_in_targets
+        + ship.calculate_distance_between(planet)
         - 0.5*planet.radius)
 
 while True:
     # TURN START
     # Update the map for the new turn and get the latest version
     game_map = game.update_map()
+
+    # maps planets -> ships trying to dock on them
+    dock_attempts = {}
+    ship_targets = {}
 
     # Here we define the set of commands to be sent to the Halite engine at the end of the turn
     command_queue = []
@@ -46,10 +55,10 @@ while True:
         # TODO: Most basic enhancement is to consider planets in order of proximity to ship;
         # TODO: and to have ships target different planets from each other
         # For each planet in the game (only non-destroyed planets are included)
-        for planet in sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet)):
+        for planet in sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet, ship_targets)):
             # TODO: Identify planets that are vulnerable to re-capture
             # If the planet is owned
-            if planet.is_owned() and planet.owner == ship.owner:
+            if (planet.is_owned() and planet.owner == ship.owner) or planet in dock_attempts:
                 # Skip this planet
                 continue
 
@@ -58,8 +67,10 @@ while True:
                     # distance is good
                     ship.can_dock(planet) and
                     # don't try to dock on a planet someone else owns
-                    not (planet.is_owned() and planet.owner != ship.owner)): #TODO: Don't have our own ships conflict each other
+                    not (planet.is_owned() and planet.owner != ship.owner) and
+                    not planet in dock_attempts): #TODO: Don't have our own ships conflict each other
                 # We add the command by appending it to the command_queue
+                dock_attempts[planet] = ship
                 command_queue.append(ship.dock(planet))
             else:
                 # TODO: What is this? Probably should be allocating ships to planets, and sending those ships to planets
@@ -78,7 +89,8 @@ while True:
                 if planet.is_owned() and planet.owner != ship.owner:
                     # attack the docked ships
                     target_object = planet.all_docked_ships()[0]
-                
+
+                ship_targets[ship] = target_object
                 navigate_command = ship.navigate(
                     ship.closest_point_to(target_object),
                     game_map,
