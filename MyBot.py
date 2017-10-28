@@ -28,11 +28,12 @@ def planetscore(ship, planet, ship_targets):
     count_in_targets = len([target for target in ship_targets.values() if target == planet])
     # higher numbers make a planet LESS desirable
     return (
-        10*int(planet.is_owned())
+        -100*int(planet.is_owned() and planet.owner == ship.owner and not planet.is_full())
         + 100*int(planet.is_owned() and planet.owner != ship.owner)
         + 200*count_in_targets
-        + ship.calculate_distance_between(planet)
-        - 0.5*planet.radius)
+        + ship.calculate_distance_between(planet)**2
+        # bigger owned planets by other people are less attractive
+        - (0.5 - int(planet.is_owned() and planet.owner != ship.owner))*planet.radius)
 
 while True:
     # TURN START
