@@ -26,7 +26,7 @@ def planetscore(ship, planet):
     return (
         1000*int(planet.is_owned())
         +  ship.calculate_distance_between(planet)
-        - planet.radius)
+        - 0.5*planet.radius)
 
 while True:
     # TURN START
@@ -54,7 +54,11 @@ while True:
                 continue
 
             # If we can dock, let's (try to) dock. If two ships try to dock at once, neither will be able to.
-            if ship.can_dock(planet): #TODO: Don't have our own ships conflict each other
+            if (
+                    # distance is good
+                    ship.can_dock(planet) and
+                    # don't try to dock on a planet someone else owns
+                    not (planet.is_owned() and planet.owner != ship.owner)): #TODO: Don't have our own ships conflict each other
                 # We add the command by appending it to the command_queue
                 command_queue.append(ship.dock(planet))
             else:
@@ -69,8 +73,14 @@ while True:
                 # This will mean that you have a higher probability of crashing into ships, but it also means you will
                 # make move decisions much quicker. As your skill progresses and your moves turn more optimal you may
                 # wish to turn that option off.
+
+                target_object = planet
+                if planet.is_owned() and planet.owner != ship.owner:
+                    # attack the docked ships
+                    target_object = planet.all_docked_ships()[0]
+                
                 navigate_command = ship.navigate(
-                    ship.closest_point_to(planet),
+                    ship.closest_point_to(target_object),
                     game_map,
                     speed=int(hlt.constants.MAX_SPEED),
                     ignore_ships=True)
