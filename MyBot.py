@@ -30,6 +30,7 @@ while True:
     command_queue = []
     # For every ship that I control
     for ship in game_map.get_me().all_ships():
+        # TODO: Optimally Allocate ships between planets
         # If the ship is docked
         if ship.docking_status != ship.DockingStatus.UNDOCKED:
             # Skip this ship
@@ -37,16 +38,20 @@ while True:
 
         # For each planet in the game (only non-destroyed planets are included)
         for planet in game_map.all_planets():
+            # TODO: Identify planets that are vulnerable to re-capture
             # If the planet is owned
             if planet.is_owned():
                 # Skip this planet
                 continue
 
             # If we can dock, let's (try to) dock. If two ships try to dock at once, neither will be able to.
-            if ship.can_dock(planet):
+            if ship.can_dock(planet): #TODO: Don't have our own ships conflict each other
                 # We add the command by appending it to the command_queue
                 command_queue.append(ship.dock(planet))
             else:
+                # TODO: What is this? Probably should be allocating ships to planets, and sending those ships to planets
+                # after recalibrating what planet they are targeted for
+                
                 # If we can't dock, we move towards the closest empty point near this planet (by using closest_point_to)
                 # with constant speed. Don't worry about pathfinding for now, as the command will do it for you.
                 # We run this navigate command each turn until we arrive to get the latest move.
@@ -58,7 +63,7 @@ while True:
                 navigate_command = ship.navigate(
                     ship.closest_point_to(planet),
                     game_map,
-                    speed=int(hlt.constants.MAX_SPEED/2),
+                    speed=int(hlt.constants.MAX_SPEED),
                     ignore_ships=True)
                 # If the move is possible, add it to the command_queue (if there are too many obstacles on the way
                 # or we are trapped (or we reached our destination!), navigate_command will return null;
