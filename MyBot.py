@@ -21,6 +21,13 @@ game = hlt.Game("Settler")
 # Then we print our start message to the logs
 logging.info("Starting my Settler bot!")
 
+def planetscore(ship, planet):
+    # higher numbers make a planet LESS desirable
+    return (
+        1000*int(planet.is_owned())
+        +  ship.calculate_distance_between(planet)
+        - planet.radius)
+
 while True:
     # TURN START
     # Update the map for the new turn and get the latest version
@@ -39,7 +46,7 @@ while True:
         # TODO: Most basic enhancement is to consider planets in order of proximity to ship;
         # TODO: and to have ships target different planets from each other
         # For each planet in the game (only non-destroyed planets are included)
-        for planet in sorted(game_map.all_planets(), key=ship.calculate_distance_between):
+        for planet in sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet)):
             # TODO: Identify planets that are vulnerable to re-capture
             # If the planet is owned
             if planet.is_owned() and planet.owner == ship.owner:

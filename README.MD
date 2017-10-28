@@ -1,3 +1,13 @@
+# Building and submitting
+
+```
+cd /Users/marcin/Downloads/Halite2_Python3_MacOS
+. .venv/bin/activate
+zip -r ../botzip.zip *
+python .venv//lib/python3.6/site-packages/hlt_client/client.py bot -b ../botzip.zip
+```
+
+
 # Using your starter kit
 
 All starter kits should contain a `run_game.sh` and `run_game.bash`, you can use these scripts to quickly run a game of halite. By default, this script runs the basic __Settler__ bot against itself.
