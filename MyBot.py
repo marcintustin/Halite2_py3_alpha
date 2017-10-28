@@ -21,19 +21,20 @@ game = hlt.Game("Settler")
 # Then we print our start message to the logs
 logging.info("Starting my Settler bot!")
 
-def planetscore(ship, planet, ship_targets):
+def planetscore(ship, planet, ship_targets, dock_attempts):
     """
     ship_targets is a map ship -> target_object
     """
     count_in_targets = len([target for target in ship_targets.values() if target == planet])
     # higher numbers make a planet LESS desirable
     return (
-        -100*int(planet.is_owned() and planet.owner == ship.owner and not planet.is_full())
+        -20*int(planet.is_owned() and planet.owner == ship.owner and not planet.is_full())
+        + 1000 * int(planet in dock_attempts)
         + 100*int(planet.is_owned() and planet.owner != ship.owner)
         + 200*count_in_targets
-        + ship.calculate_distance_between(planet)**2
+        + ship.calculate_distance_between(planet)
         # bigger owned planets by other people are less attractive
-        - (0.5 - int(planet.is_owned() and planet.owner != ship.owner))*planet.radius)
+        - 2*(0.5 - int(planet.is_owned() and planet.owner != ship.owner))*planet.radius)
 
 while True:
     # TURN START
@@ -42,6 +43,7 @@ while True:
 
     # maps planets -> ships trying to dock on them
     dock_attempts = {}
+    # maps ships -> targets
     ship_targets = {}
 
     # Here we define the set of commands to be sent to the Halite engine at the end of the turn
@@ -57,7 +59,7 @@ while True:
         # TODO: Most basic enhancement is to consider planets in order of proximity to ship;
         # TODO: and to have ships target different planets from each other
         # For each planet in the game (only non-destroyed planets are included)
-        for planet in sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet, ship_targets)):
+        for planet in sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet, ship_targets, dock_attempts)):
             # TODO: Identify planets that are vulnerable to re-capture
             # If the planet is owned
             if (planet.is_owned() and planet.owner == ship.owner) or planet in dock_attempts:
