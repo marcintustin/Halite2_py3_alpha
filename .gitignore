@@ -102,3 +102,5 @@ ENV/
 
 # Halite
 replays/
+.replays/
+.DS_Store
