@@ -42,7 +42,7 @@ while True:
         for planet in sorted(game_map.all_planets(), key=ship.calculate_distance_between):
             # TODO: Identify planets that are vulnerable to re-capture
             # If the planet is owned
-            if planet.is_owned():
+            if planet.is_owned() and planet.owner == ship.owner:
                 # Skip this planet
                 continue
 
