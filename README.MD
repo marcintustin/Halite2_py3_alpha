@@ -7,6 +7,14 @@ zip -r ../botzip.zip *
 python .venv//lib/python3.6/site-packages/hlt_client/client.py bot -b ../botzip.zip
 ```
 
+# Running locally
+```
+. ./.venv/bin/activate # my virtualenv location
+./halite --log -d "240 160" "python MyBot.py" "python MyBot.py"
+```
+
+Files named 0_Settler.log are your debug output
+
 
 # Using your starter kit
 

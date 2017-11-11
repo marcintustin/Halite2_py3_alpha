@@ -14,12 +14,13 @@ to log anything use the logging module.
 import hlt
 # Then let's import the logging module so we can print out information
 import logging
+import random
 
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
 game = hlt.Game("Settler")
 # Then we print our start message to the logs
-logging.info("Starting my Settler bot!")
+logging.error("Starting my Settler bot!")
 
 def planetscore(ship, planet, ship_targets, dock_attempts):
     """
@@ -27,7 +28,7 @@ def planetscore(ship, planet, ship_targets, dock_attempts):
     """
     count_in_targets = len([target for target in ship_targets.values() if target == planet])
     # higher numbers make a planet LESS desirable
-    return (
+    score = (
         -20*int(planet.is_owned() and planet.owner == ship.owner and not planet.is_full())
         + 1000 * int(planet in dock_attempts)
         + 100*int(planet.is_owned() and planet.owner != ship.owner)
@@ -35,6 +36,10 @@ def planetscore(ship, planet, ship_targets, dock_attempts):
         + ship.calculate_distance_between(planet)
         # bigger owned planets by other people are less attractive
         - 2*(0.5 - int(planet.is_owned() and planet.owner != ship.owner))*planet.radius)
+    logging.debug("Score for {ship}, {planet}: {score}".format(ship=ship, planet=planet, score=score))
+    logging.debug("In planetscore: ship_targets={ship_targets}, dock_attempts={dock_attempts}".format(ship_targets=ship_targets, dock_attempts=dock_attempts))
+    return score
+
 
 while True:
     # TURN START
@@ -49,7 +54,9 @@ while True:
     # Here we define the set of commands to be sent to the Halite engine at the end of the turn
     command_queue = []
     # For every ship that I control
-    for ship in game_map.get_me().all_ships():
+    ships = game_map.get_me().all_ships()
+    random.shuffle(ships)
+    for ship in ships:
         # TODO: Optimally Allocate ships between planets
         # If the ship is docked
         if ship.docking_status != ship.DockingStatus.UNDOCKED:
@@ -59,7 +66,9 @@ while True:
         # TODO: Most basic enhancement is to consider planets in order of proximity to ship;
         # TODO: and to have ships target different planets from each other
         # For each planet in the game (only non-destroyed planets are included)
-        for planet in sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet, ship_targets, dock_attempts)):
+        scored_planets = sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet, ship_targets, dock_attempts))
+        logging.debug("Scored planets for ship {ship}: {scored_planets}".format(ship=ship, scored_planets=scored_planets))
+        for planet in scored_planets:
             # TODO: Identify planets that are vulnerable to re-capture
             # If the planet is owned
             if (planet.is_owned() and planet.owner == ship.owner) or planet in dock_attempts:

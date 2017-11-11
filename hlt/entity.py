@@ -270,6 +270,7 @@ class Ship(Entity):
         return "u {}".format(self.id)
 
     # TODO: Fix this to take account of existing velocity
+    # TODO: GPU accelerate this
     def navigate(self, target, game_map, speed, avoid_obstacles=True, max_corrections=90, angular_step=1,
                  ignore_ships=False, ignore_planets=False):
         """
