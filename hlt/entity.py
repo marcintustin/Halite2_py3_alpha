@@ -272,7 +272,7 @@ class Ship(Entity):
     # TODO: Fix this to take account of existing velocity
     # TODO: GPU accelerate this
     def navigate(self, target, game_map, speed, avoid_obstacles=True, max_corrections=90, angular_step=1,
-                 ignore_ships=False, ignore_planets=False):
+                 ignore_ships=False, ignore_planets=False, angle_dodges=None):
         """
         Move a ship to a specific target position (Entity). It is recommended to place the position
         itself here, else navigate will crash into the target. If avoid_obstacles is set to True (default)
@@ -302,8 +302,10 @@ class Ship(Entity):
             else Planet if (ignore_planets and not ignore_ships) \
             else Entity
         if avoid_obstacles and game_map.obstacles_between(self, target, ignore):
-            new_target_dx = math.cos(math.radians(angle + angular_step)) * distance
-            new_target_dy = math.sin(math.radians(angle + angular_step)) * distance
+            dodge_angle = math.radians(angle + angular_step) + (
+                next(angle_dodges) if angle_dodges else 0)
+            new_target_dx = math.cos(dodge_angle) * distance
+            new_target_dy = math.sin(dodge_angle) * distance
             new_target = Position(self.x + new_target_dx, self.y + new_target_dy)
             return self.navigate(new_target, game_map, speed, True, max_corrections - 1, angular_step)
         speed = speed if (distance >= speed) else distance

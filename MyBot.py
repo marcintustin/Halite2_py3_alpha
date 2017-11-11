@@ -15,6 +15,7 @@ import hlt
 # Then let's import the logging module so we can print out information
 import logging
 import random
+import math
 
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
@@ -41,6 +42,17 @@ def planetscore(ship, planet, ship_targets, dock_attempts):
     return score
 
 
+def monotonic_deflections(seed=0, deflection_range=math.pi/4):
+    deflection = seed
+    while True:
+        deflection += random.uniform(0, deflection_range)
+        yield deflection
+
+
+# statefully generate increasing deflections for obstacle avoidance
+deflections = monotonic_deflections()
+
+
 while True:
     # TURN START
     # Update the map for the new turn and get the latest version
@@ -50,12 +62,13 @@ while True:
     dock_attempts = {}
     # maps ships -> targets
     ship_targets = {}
+    
 
     # Here we define the set of commands to be sent to the Halite engine at the end of the turn
     command_queue = []
     # For every ship that I control
-    ships = game_map.get_me().all_ships()
-    random.shuffle(ships)
+    ships = game_map.get_me().all_ships()[:]
+    # random.shuffle(ships)
     for ship in ships:
         # TODO: Optimally Allocate ships between planets
         # If the ship is docked
@@ -81,10 +94,11 @@ while True:
                     ship.can_dock(planet) and
                     # don't try to dock on a planet someone else owns
                     not (planet.is_owned() and planet.owner != ship.owner) and
-                    not planet in dock_attempts): #TODO: Don't have our own ships conflict each other
+                    not planet in dock_attempts):  # TODO: Don't have our own ships conflict each other
                 # We add the command by appending it to the command_queue
                 dock_attempts[planet] = ship
                 command_queue.append(ship.dock(planet))
+                logging.debug("making a dock attempt right now for {ship} to {planet}".format(ship=ship, planet=planet))
             else:
                 # TODO: What is this? Probably should be allocating ships to planets, and sending those ships to planets
                 # after recalibrating what planet they are targeted for
@@ -108,7 +122,8 @@ while True:
                     ship.closest_point_to(target_object),
                     game_map,
                     speed=int(hlt.constants.MAX_SPEED),
-                    ignore_ships=True)
+                    ignore_ships=False,
+                    angle_dodges=deflections)
                 # If the move is possible, add it to the command_queue (if there are too many obstacles on the way
                 # or we are trapped (or we reached our destination!), navigate_command will return null;
                 # don't fret though, we can run the command again the next turn)

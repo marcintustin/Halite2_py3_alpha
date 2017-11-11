@@ -1,5 +1,10 @@
 from .entity import Position, Entity
 
+def intersect_segments_circles(segments, circles, *, fudge=0.5):
+    """
+    calculate the intersection of segments with circles
+    """
+
 
 def intersect_segment_circle(start, end, circle, *, fudge=0.5):
     """
