@@ -65,7 +65,9 @@ class Game:
         :return: nothing
         """
         log_file = "{}_{}.log".format(tag, name)
-        logging.basicConfig(filename=log_file, level=logging.DEBUG, filemode='w')
+        logging.basicConfig(
+            filename=log_file, level=logging.DEBUG, filemode='w',
+            format='%(created)f - %(message)s')
         logging.info("Initialized bot {}".format(name))
 
     def __init__(self, name):

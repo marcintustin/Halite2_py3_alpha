@@ -17,12 +17,11 @@ import logging
 import random
 import math
 import copy
-
+import sys
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
+# this configures logging to be compatible with halite
 game = hlt.Game("Settler")
-# Then we print our start message to the logs
-logging.error("Starting my Settler bot!")
 
 
 def planetscore(ship, planet, ship_targets, dock_attempts):
@@ -40,7 +39,7 @@ def planetscore(ship, planet, ship_targets, dock_attempts):
         + 100*int(is_others)
         + 200*count_in_targets
         + distance
-        - 100 * int(distance < 7)
+        - 10 * int(distance < 7)
         # bigger owned planets by other people are less attractive
         - 2*(0.5 - int(is_others))*planet.radius)
     # logging.debug("Score for {ship}, {planet}: {score}".format(ship=ship, planet=planet, score=score))
@@ -87,10 +86,13 @@ while True:
         # TODO: Most basic enhancement is to consider planets in order of proximity to ship;
         # TODO: and to have ships target different planets from each other
         # For each planet in the game (only non-destroyed planets are included)
-        
+
+        logging.debug("About to score planets")
         scored_planets = sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet, ship_targets, dock_attempts))
         # logging.debug("Scored planets for ship {ship}: {scored_planets}".format(ship=ship, scored_planets=scored_planets))
-        for planet in scored_planets:
+        logging.debug("Scored planets")
+        for n, planet in enumerate(scored_planets):
+            logging.debug("Processing planet {}".format(n))
             # TODO: Identify planets that are vulnerable to re-capture
             # If we can dock, let's (try to) dock. If two ships try to dock at once, neither will be able to.
             if (
@@ -134,7 +136,7 @@ while True:
                 if navigate_command:
                     command_queue.append(navigate_command)
             break
-
+        logging.debug("Processed all planets for ship {}".format(ship))
     # Send our set of commands to the Halite engine for this turn
     game.send_command_queue(command_queue)
     # TURN END
