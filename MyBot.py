@@ -30,17 +30,21 @@ def planetscore(ship, planet, ship_targets, dock_attempts):
     ship_targets is a map ship -> target_object
     """
     count_in_targets = len([target for target in ship_targets.values() if target == planet])
+    distance = ship.calculate_distance_between(planet)
+    is_mine = planet.is_owned() and planet.owner == ship.owner
+    is_others = planet.is_owned() and planet.owner != ship.owner
     # higher numbers make a planet LESS desirable
     score = (
-        -70*int(planet.is_owned() and planet.owner == ship.owner and not planet.is_full())
-        + 1000*int(planet.is_owned() and planet.owner == ship.owner and planet.is_full())
-        + 100*int(planet.is_owned() and planet.owner != ship.owner)
+        -70*int(is_mine and not planet.is_full())
+        + 1000*int(is_mine and planet.is_full())
+        + 100*int(is_others)
         + 200*count_in_targets
-        + ship.calculate_distance_between(planet)
+        + distance
+        - 100 * int(distance < 7)
         # bigger owned planets by other people are less attractive
-        - 2*(0.5 - int(planet.is_owned() and planet.owner != ship.owner))*planet.radius)
-    logging.debug("Score for {ship}, {planet}: {score}".format(ship=ship, planet=planet, score=score))
-    logging.debug("In planetscore: ship_targets={ship_targets}, dock_attempts={dock_attempts}".format(ship_targets=ship_targets, dock_attempts=dock_attempts))
+        - 2*(0.5 - int(is_others))*planet.radius)
+    # logging.debug("Score for {ship}, {planet}: {score}".format(ship=ship, planet=planet, score=score))
+    # logging.debug("In planetscore: ship_targets={ship_targets}, dock_attempts={dock_attempts}".format(ship_targets=ship_targets, dock_attempts=dock_attempts))
     return score
 
 
@@ -83,8 +87,9 @@ while True:
         # TODO: Most basic enhancement is to consider planets in order of proximity to ship;
         # TODO: and to have ships target different planets from each other
         # For each planet in the game (only non-destroyed planets are included)
+        
         scored_planets = sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet, ship_targets, dock_attempts))
-        logging.debug("Scored planets for ship {ship}: {scored_planets}".format(ship=ship, scored_planets=scored_planets))
+        # logging.debug("Scored planets for ship {ship}: {scored_planets}".format(ship=ship, scored_planets=scored_planets))
         for planet in scored_planets:
             # TODO: Identify planets that are vulnerable to re-capture
             # If we can dock, let's (try to) dock. If two ships try to dock at once, neither will be able to.
@@ -97,7 +102,7 @@ while True:
                 # We add the command by appending it to the command_queue
                 # dock_attempts[planet] = ship
                 command_queue.append(ship.dock(planet))
-                logging.debug("making a dock attempt right now for {ship} to {planet}".format(ship=ship, planet=planet))
+                #logging.debug("making a dock attempt right now for {ship} to {planet}".format(ship=ship, planet=planet))
             else:
                 # TODO: What is this? Probably should be allocating ships to planets, and sending those ships to planets
                 # after recalibrating what planet they are targeted for
@@ -121,7 +126,7 @@ while True:
                     ship.closest_point_to(target_object),
                     game_map,
                     speed=int(hlt.constants.MAX_SPEED),
-                    ignore_ships=False,
+                    ignore_ships=True,
                     angle_dodges=deflections)
                 # If the move is possible, add it to the command_queue (if there are too many obstacles on the way
                 # or we are trapped (or we reached our destination!), navigate_command will return null;
