@@ -1,10 +1,10 @@
 from . import collision, entity
-
+import numpy as np
 
 class Map:
     """
     Map which houses the current game information/metadata.
-    
+
     :ivar my_id: Current player id associated with the map
     :ivar width: Map width
     :ivar height: Map height
@@ -59,6 +59,16 @@ class Map:
         """
         return list(self._planets.values())
 
+    def apply_thrust(self, cmd):
+        t, *params = cmd.split()
+        ship_id, speed, angle = params.map(int)
+        # convert speed, angle to x,y vector
+        move_as_complex = np.array(speed) * np.exp(np.complex(0, angle))
+        ship = self.get_me().get_ship(ship_id)
+        result_as_complex = move_as_complex + np.complex(ship.x, ship.y)
+        ship.x, ship.y = result_as_complex.real, result_as_complex.imag
+        
+        
     def nearby_entities_by_distance(self, entity):
         """
         :param entity: The source entity to find distances from

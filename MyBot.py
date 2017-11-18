@@ -16,12 +16,14 @@ import hlt
 import logging
 import random
 import math
+import copy
 
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
 game = hlt.Game("Settler")
 # Then we print our start message to the logs
 logging.error("Starting my Settler bot!")
+
 
 def planetscore(ship, planet, ship_targets, dock_attempts):
     """
@@ -30,8 +32,8 @@ def planetscore(ship, planet, ship_targets, dock_attempts):
     count_in_targets = len([target for target in ship_targets.values() if target == planet])
     # higher numbers make a planet LESS desirable
     score = (
-        -20*int(planet.is_owned() and planet.owner == ship.owner and not planet.is_full())
-        + 1000 * int(planet in dock_attempts)
+        -70*int(planet.is_owned() and planet.owner == ship.owner and not planet.is_full())
+        + 1000*int(planet.is_owned() and planet.owner == ship.owner and planet.is_full())
         + 100*int(planet.is_owned() and planet.owner != ship.owner)
         + 200*count_in_targets
         + ship.calculate_distance_between(planet)
@@ -42,32 +44,34 @@ def planetscore(ship, planet, ship_targets, dock_attempts):
     return score
 
 
-def monotonic_deflections(seed=0, deflection_range=math.pi/4):
+def monotonic_deflections(seed=0, deflection_range=math.pi/32):
     deflection = seed
     while True:
         deflection += random.uniform(0, deflection_range)
         yield deflection
 
-
-# statefully generate increasing deflections for obstacle avoidance
-deflections = monotonic_deflections()
-
+# maps planets -> ships trying to dock on them
+dock_attempts = {}
 
 while True:
     # TURN START
     # Update the map for the new turn and get the latest version
     game_map = game.update_map()
+    # make changes to reflect what we intend to do
+    #future_game_map = copy.deepcopy(game_map)
 
-    # maps planets -> ships trying to dock on them
-    dock_attempts = {}
+
     # maps ships -> targets
     ship_targets = {}
-    
+
+    # statefully generate increasing deflections for obstacle avoidance
+    deflections = monotonic_deflections()
+
 
     # Here we define the set of commands to be sent to the Halite engine at the end of the turn
     command_queue = []
     # For every ship that I control
-    ships = game_map.get_me().all_ships()[:]
+    ships = game_map.get_me().all_ships() #[:]
     # random.shuffle(ships)
     for ship in ships:
         # TODO: Optimally Allocate ships between planets
@@ -83,20 +87,15 @@ while True:
         logging.debug("Scored planets for ship {ship}: {scored_planets}".format(ship=ship, scored_planets=scored_planets))
         for planet in scored_planets:
             # TODO: Identify planets that are vulnerable to re-capture
-            # If the planet is owned
-            if (planet.is_owned() and planet.owner == ship.owner) or planet in dock_attempts:
-                # Skip this planet
-                continue
-
             # If we can dock, let's (try to) dock. If two ships try to dock at once, neither will be able to.
             if (
                     # distance is good
                     ship.can_dock(planet) and
                     # don't try to dock on a planet someone else owns
                     not (planet.is_owned() and planet.owner != ship.owner) and
-                    not planet in dock_attempts):  # TODO: Don't have our own ships conflict each other
+                    not (planet.is_owned() and planet.owner == ship.owner and planet.is_full())):  # TODO: Don't have our own ships conflict each other
                 # We add the command by appending it to the command_queue
-                dock_attempts[planet] = ship
+                # dock_attempts[planet] = ship
                 command_queue.append(ship.dock(planet))
                 logging.debug("making a dock attempt right now for {ship} to {planet}".format(ship=ship, planet=planet))
             else:
