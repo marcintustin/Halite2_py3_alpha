@@ -55,15 +55,15 @@ PLANET_X, PLANET_Y = 4, 5
 SIZE_PLANET_FEATURES = 6
 PLANET_ATTRACTION_THRESHOLD = 14
 
-def score_all_planets_for_one_ship(ship, planets, weights=PLANET_SCORING_WEIGHTS):
+def all_planet_features(planets, my_id):
+    features = np.concatenate([planet_features(planet, my_id) for planet in planets])
+    features.shape = (len(planets), SIZE_PLANET_FEATURES)
+    return features
+
+def score_all_planets_for_one_ship(ship, planet_features, planet_positions, weights=PLANET_SCORING_WEIGHTS):
     """
     planets should be list like - position will be used to retrieve the least scoring planet
     """
-    #totalelems = len(planets) * weights.size
-    all_planet_features = np.concatenate([planet_features(planet, ship.owner) for planet in planets])
-    all_planet_features.shape = (len(planets), SIZE_PLANET_FEATURES)
-    planet_positions = all_planet_features[:, [PLANET_X, PLANET_Y]]
-
     ship_position_once = np.array([ship.x, ship.y])
     # repeat positions vertically
     ship_position = np.tile(ship_position_once, (len(planets),1))
@@ -73,7 +73,7 @@ def score_all_planets_for_one_ship(ship, planets, weights=PLANET_SCORING_WEIGHTS
     planet_distances.shape = (len(planet_distances), 1)
     planet_closer_than_threshold = (planet_distances < PLANET_ATTRACTION_THRESHOLD).astype(int)
     
-    combined_features = np.hstack((all_planet_features[:, 0:4], planet_distances, planet_closer_than_threshold))
+    combined_features = np.hstack((planet_features[:, 0:4], planet_distances, planet_closer_than_threshold))
     
     #combined_features.shape = (len(planets), weights.size)
     scored = np.dot(combined_features, weights)
@@ -109,6 +109,10 @@ while True:
     # For every ship that I control
     ships = game_map.get_me().all_ships() #[:]
     planets = game_map.all_planets()
+
+    all_planet_features_this_round = all_planet_features(planets, game_map.my_id)
+    planet_positions = all_planet_features_this_round[:, [PLANET_X, PLANET_Y]]
+
     
     # random.shuffle(ships)
     for ship in ships:
@@ -126,7 +130,7 @@ while True:
         # scored_planets = sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet, ship_targets, dock_attempts))
         # # logging.debug("Scored planets for ship {ship}: {scored_planets}".format(ship=ship, scored_planets=scored_planets))
         # logging.debug("Scored planets")
-        planet = score_all_planets_for_one_ship(ship, planets)
+        planet = score_all_planets_for_one_ship(ship, all_planet_features_this_round, planet_positions)
         # logging.debug("Processing planet {}".format(n))
         # TODO: Identify planets that are vulnerable to re-capture
         # If we can dock, let's (try to) dock. If two ships try to dock at once, neither will be able to.
