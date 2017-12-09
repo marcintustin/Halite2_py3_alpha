@@ -25,55 +25,58 @@ import itertools
 # this configures # logging to be compatible with halite
 game = hlt.Game("Settler")
 
-
-def planetscore(ship, planet, ship_targets, dock_attempts):
-    """
-    ship_targets is a map ship -> target_object
-    """
-    count_in_targets = len([target for target in ship_targets.values() if target == planet])
-    distance = ship.calculate_distance_between(planet)
-    is_mine = planet.is_owned() and planet.owner == ship.owner
-    is_others = planet.is_owned() and planet.owner != ship.owner
-    # higher numbers make a planet LESS desirable
-    score = (
-        -70*int(is_mine and not planet.is_full())
-        + 1000*int(is_mine and planet.is_full())
-        + 100*int(is_others)
-        + 200*count_in_targets
-        + distance
-        - 20 * int(distance < 14)
-        # bigger owned planets by other people are less attractive
-        - 2*(0.5 - int(is_others))*planet.radius)
-    # # logging.debug("Score for {ship}, {planet}: {score}".format(ship=ship, planet=planet, score=score))
-    # # logging.debug("In planetscore: ship_targets={ship_targets}, dock_attempts={dock_attempts}".format(ship_targets=ship_targets, dock_attempts=dock_attempts))
-    return score
-
-
-
-PLANET_SCORING_WEIGHTS = np.array([[-70], [1000], [100], [1], [-20], [-2]])
+# higher numbers make a planet LESS desirable
+PLANET_SCORING_WEIGHTS = np.array([[-70], [1000], [100], [-2], [1], [-20]])
 
 def planet_weights(ship, planets):
     for planet in planets:
-        distance = ship.calculate_distance_between(planet)
+        distance = ship.calculate_relative_distance(planet)
         is_mine = planet.is_owned() and planet.owner == ship.owner
         is_others = planet.is_owned() and planet.owner != ship.owner
 
         yield (int(is_mine and not planet.is_full()),
                int(is_mine and planet.is_full()),
                int(is_others),
+               (0.5 - int(is_others))*planet.radius,
                distance,
-               int(distance < 14),
-               (0.5 - int(is_others))*planet.radius)
+               int(distance < 14))
 
+def planet_features(planet, my_id):
+    is_owned = planet.is_owned()
+    is_mine = is_owned and planet.owner == my_id
+    is_full = planet.is_full()
+    is_others = int(is_owned and planet.owner != my_id)
+    # NOTE NOT MEANINGFULLY COMBINABLE WITH WEIGHTS
+    return np.array(
+        [int(is_mine and not is_full), int(is_mine and is_full), is_others, (0.5 - is_others)*planet.radius, planet.x, planet.y ])
+
+# columns containing X and Y for planet features
+PLANET_X, PLANET_Y = 4, 5
+SIZE_PLANET_FEATURES = 6
+PLANET_ATTRACTION_THRESHOLD = 14
 
 def score_all_planets_for_one_ship(ship, planets, weights=PLANET_SCORING_WEIGHTS):
     """
     planets should be list like - position will be used to retrieve the least scoring planet
     """
-    totalelems = len(planets) * weights.size
-    planet_features = np.fromiter(itertools.chain.from_iterable(planet_weights(ship, planets)), np.float, totalelems)
-    planet_features.shape = (len(planets), weights.size)
-    scored = np.dot(planet_features, weights)
+    #totalelems = len(planets) * weights.size
+    all_planet_features = np.concatenate([planet_features(planet, ship.owner) for planet in planets])
+    all_planet_features.shape = (len(planets), SIZE_PLANET_FEATURES)
+    planet_positions = all_planet_features[:, [PLANET_X, PLANET_Y]]
+
+    ship_position_once = np.array([ship.x, ship.y])
+    # repeat positions vertically
+    ship_position = np.tile(ship_position_once, (len(planets),1))
+
+    planet_distances = np.linalg.norm((planet_positions - ship_position), axis=1)
+    # make a column vector so we can hstack
+    planet_distances.shape = (len(planet_distances), 1)
+    planet_closer_than_threshold = (planet_distances < PLANET_ATTRACTION_THRESHOLD).astype(int)
+    
+    combined_features = np.hstack((all_planet_features[:, 0:4], planet_distances, planet_closer_than_threshold))
+    
+    #combined_features.shape = (len(planets), weights.size)
+    scored = np.dot(combined_features, weights)
     best_idx = np.argmin(scored)
     return planets[best_idx]
 
@@ -162,7 +165,7 @@ while True:
                 game_map,
                 speed=int(hlt.constants.MAX_SPEED),
                 ignore_ships=False,
-                angle_dodges=deflections)
+                angle_dodges=None)
             # If the move is possible, add it to the command_queue (if there are too many obstacles on the way
             # or we are trapped (or we reached our destination!), navigate_command will return null;
             # don't fret though, we can run the command again the next turn)

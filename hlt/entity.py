@@ -3,9 +3,10 @@ import abc
 import math
 from enum import Enum
 from . import constants
+import numpy as np
 
 
-class Entity:
+class Entity(object):
     """
     Then entity abstract base-class represents all game entities possible. As a base all entities possess
     a position, radius, health, an owner and an id. Note that ease of interoperability, Position inherits from
@@ -20,7 +21,9 @@ class Entity:
     """
     __metaclass__ = abc.ABCMeta
 
-    def _init__(self, x, y, radius, health, player, entity_id):
+    COORDS_MASK = np.array([1,1,0,0])
+    
+    def __init__(self, x, y, radius, health, player, entity_id):
         self.x = x
         self.y = y
         self.radius = radius
@@ -28,6 +31,15 @@ class Entity:
         self.owner = player
         self.id = entity_id
 
+        self.array = np.array([x, y, radius, player])
+
+    def calculate_relative_distance(self, other, coords_mask=COORDS_MASK):
+        other_pos = (other.array * coords_mask)
+        self_pos = self.array * coords_mask
+
+        offset = self_pos - other_pos
+        return np.linalg.norm(offset)
+        
     def calculate_distance_between(self, target):
         """
         Calculates the distance between this object and the target.
@@ -95,18 +107,21 @@ class Planet(Entity):
 
     def __init__(self, planet_id, x, y, hp, radius, docking_spots, current,
                  remaining, owned, owner, docked_ships):
-        self.id = planet_id
-        self.x = x
-        self.y = y
-        self.radius = radius
+        super().__init__(x, y, radius, hp,  owner if bool(int(owned)) else -1, planet_id)
+        #self.id = planet_id
+        #self.x = x
+        #self.y = y
+        #self.radius = radius
         self.num_docking_spots = docking_spots
         self.current_production = current
         self.remaining_resources = remaining
-        self.health = hp
-        self.owner = owner if bool(int(owned)) else None
+        #self.health = hp
+        #self.owner = owner if bool(int(owned)) else None
         self._docked_ship_ids = docked_ships
         self._docked_ships = {}
 
+        
+        
     def get_docked_ship(self, ship_id):
         """
         Return the docked ship designated by its id.
@@ -132,7 +147,7 @@ class Planet(Entity):
         :return: True if owned, False otherwise
         :rtype: bool
         """
-        return self.owner is not None
+        return self.owner is not None and self.owner is not -1
 
     def is_full(self):
         """
@@ -151,7 +166,7 @@ class Planet(Entity):
         :param dict[int, gane_map.Player] players: A dictionary of player objects keyed by id
         :return: nothing
         """
-        if self.owner is not None:
+        if self.is_owned():
             self.owner = players.get(self.owner)
             for ship in self._docked_ship_ids:
                 self._docked_ships[ship] = self.owner.get_ship(ship)
@@ -225,12 +240,13 @@ class Ship(Entity):
 
     def __init__(self, player_id, ship_id, x, y, hp, vel_x, vel_y,
                  docking_status, planet, progress, cooldown):
-        self.id = ship_id
-        self.x = x
-        self.y = y
-        self.owner = player_id
-        self.radius = constants.SHIP_RADIUS
-        self.health = hp
+        super().__init__(x, y, constants.SHIP_RADIUS, hp,  player_id, ship_id)
+        #self.id = ship_id
+        #self.x = x
+        #self.y = y
+        #self.owner = player_id
+        #self.radius = constants.SHIP_RADIUS
+        #self.health = hp
         self.docking_status = docking_status
         self.planet = planet if (docking_status is not Ship.DockingStatus.UNDOCKED) else None
         self._docking_progress = progress
