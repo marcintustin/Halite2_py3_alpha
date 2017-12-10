@@ -60,7 +60,8 @@ def all_planet_features(planets, my_id):
     features.shape = (len(planets), SIZE_PLANET_FEATURES)
     return features
 
-def score_all_planets_for_one_ship(ship, planet_features, planet_positions, weights=PLANET_SCORING_WEIGHTS):
+def score_all_planets_for_one_ship(ship, planets, planet_features, planet_positions,
+                                       weights=PLANET_SCORING_WEIGHTS):
     """
     planets should be list like - position will be used to retrieve the least scoring planet
     """
@@ -130,7 +131,7 @@ while True:
         # scored_planets = sorted(game_map.all_planets(), key=lambda planet: planetscore(ship, planet, ship_targets, dock_attempts))
         # # logging.debug("Scored planets for ship {ship}: {scored_planets}".format(ship=ship, scored_planets=scored_planets))
         # logging.debug("Scored planets")
-        planet = score_all_planets_for_one_ship(ship, all_planet_features_this_round, planet_positions)
+        planet = score_all_planets_for_one_ship(ship, planets, all_planet_features_this_round, planet_positions)
         # logging.debug("Processing planet {}".format(n))
         # TODO: Identify planets that are vulnerable to re-capture
         # If we can dock, let's (try to) dock. If two ships try to dock at once, neither will be able to.
