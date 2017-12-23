@@ -20,66 +20,12 @@ import copy
 import sys
 import numpy as np
 import itertools
+from weighting import *
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
 # this configures # logging to be compatible with halite
 game = hlt.Game("Settler")
 
-# higher numbers make a planet LESS desirable
-PLANET_SCORING_WEIGHTS = np.array([[-70], [1000], [100], [-2], [1], [-20]])
-
-def planet_weights(ship, planets):
-    for planet in planets:
-        distance = ship.calculate_relative_distance(planet)
-        is_mine = planet.is_owned() and planet.owner == ship.owner
-        is_others = planet.is_owned() and planet.owner != ship.owner
-
-        yield (int(is_mine and not planet.is_full()),
-               int(is_mine and planet.is_full()),
-               int(is_others),
-               (0.5 - int(is_others))*planet.radius,
-               distance,
-               int(distance < 14))
-
-def planet_features(planet, my_id):
-    is_owned = planet.is_owned()
-    is_mine = is_owned and planet.owner == my_id
-    is_full = planet.is_full()
-    is_others = int(is_owned and planet.owner != my_id)
-    # NOTE NOT MEANINGFULLY COMBINABLE WITH WEIGHTS
-    return np.array(
-        [int(is_mine and not is_full), int(is_mine and is_full), is_others, (0.5 - is_others)*planet.radius, planet.x, planet.y ])
-
-# columns containing X and Y for planet features
-PLANET_X, PLANET_Y = 4, 5
-SIZE_PLANET_FEATURES = 6
-PLANET_ATTRACTION_THRESHOLD = 14
-
-def all_planet_features(planets, my_id):
-    features = np.concatenate([planet_features(planet, my_id) for planet in planets])
-    features.shape = (len(planets), SIZE_PLANET_FEATURES)
-    return features
-
-def score_all_planets_for_one_ship(ship, planets, planet_features, planet_positions,
-                                       weights=PLANET_SCORING_WEIGHTS):
-    """
-    planets should be list like - position will be used to retrieve the least scoring planet
-    """
-    ship_position_once = np.array([ship.x, ship.y])
-    # repeat positions vertically
-    ship_position = np.tile(ship_position_once, (len(planets),1))
-
-    planet_distances = np.linalg.norm((planet_positions - ship_position), axis=1)
-    # make a column vector so we can hstack
-    planet_distances.shape = (len(planet_distances), 1)
-    planet_closer_than_threshold = (planet_distances < PLANET_ATTRACTION_THRESHOLD).astype(int)
-    
-    combined_features = np.hstack((planet_features[:, 0:4], planet_distances, planet_closer_than_threshold))
-    
-    #combined_features.shape = (len(planets), weights.size)
-    scored = np.dot(combined_features, weights)
-    best_idx = np.argmin(scored)
-    return planets[best_idx]
 
 def monotonic_deflections(seed=0, deflection_range=math.pi/32):
     deflection = seed
@@ -107,22 +53,19 @@ while True:
 
     # Here we define the set of commands to be sent to the Halite engine at the end of the turn
     command_queue = []
-    # For every ship that I control
-    ships = game_map.get_me().all_ships() #[:]
+    # For every ship that I control and is not docking
+    ships = [ship for ship in game_map.get_me().all_ships() if ship.docking_status != ship.DockingStatus.UNDOCKED]
     planets = game_map.all_planets()
 
     all_planet_features_this_round = all_planet_features(planets, game_map.my_id)
+    planet_features.shape = (len(planets), 6, 1)
     planet_positions = all_planet_features_this_round[:, [PLANET_X, PLANET_Y]]
+    # number of planets = rows; 2 columns for x and y; and thickness of 1
+    planet_positions.shape = (len(planets), 2, 1)
 
     
     # random.shuffle(ships)
     for ship in ships:
-        # TODO: Optimally Allocate ships between planets
-        # If the ship is docked
-        if ship.docking_status != ship.DockingStatus.UNDOCKED:
-            # Skip this ship
-            continue
-
         # TODO: Most basic enhancement is to consider planets in order of proximity to ship;
         # TODO: and to have ships target different planets from each other
         # For each planet in the game (only non-destroyed planets are included)
