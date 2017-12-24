@@ -76,7 +76,7 @@ class Map:
         :rtype: dict
         """
         result = {}
-        for foreign_entity in self._all_ships() + self.all_planets():
+        for foreign_entity in self.all_ships() + self.all_planets():
             if entity == foreign_entity:
                 continue
             result.setdefault(entity.calculate_distance_between(foreign_entity), []).append(foreign_entity)
@@ -88,7 +88,7 @@ class Map:
 
         :return:
         """
-        for celestial_object in self.all_planets() + self._all_ships():
+        for celestial_object in self.all_planets() + self.all_ships():
             celestial_object._link(self._players, self._planets)
 
     def _parse(self, map_string):
@@ -106,7 +106,7 @@ class Map:
         assert(len(tokens) == 0)  # There should be no remaining tokens at this point
         self._link()
 
-    def _all_ships(self):
+    def all_ships(self):
         """
         Helper function to extract all ships from all players
 
@@ -126,7 +126,7 @@ class Map:
         :return: The colliding entity if so, else None.
         :rtype: entity.Entity
         """
-        for celestial_object in self._all_ships() + self.all_planets():
+        for celestial_object in self.all_ships() + self.all_planets():
             if celestial_object is target:
                 continue
             d = celestial_object.calculate_distance_between(target)
@@ -146,7 +146,7 @@ class Map:
         """
         obstacles = []
         entities = ([] if issubclass(entity.Planet, ignore) else self.all_planets()) \
-            + ([] if issubclass(entity.Ship, ignore) else self._all_ships())
+            + ([] if issubclass(entity.Ship, ignore) else self.all_ships())
         for foreign_entity in entities:
             if foreign_entity == ship or foreign_entity == target:
                 continue
