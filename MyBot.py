@@ -22,6 +22,8 @@ import numpy as np
 import itertools
 import enemy_ships
 import collections
+import scipy.spatial.distance
+from hlt.entity import Position
 
 # GAME START
 # Here we define the bot's name as Settler and initialize the game, including communication with the Halite engine.
@@ -105,6 +107,58 @@ def monotonic_deflections(seed=0, deflection_range=math.pi/32):
 # maps planets -> ships trying to dock on them
 dock_attempts = {}
 
+SHIPTHRESHOLD = 12
+class NoShipAvailable(Exception):
+    pass
+
+cornershipID = None
+def cornershipfinder():
+    '''
+    :return: 8th ship that isn't docked (not the ID)
+    '''
+    global cornershipID
+    # if you don't do this then cornershipID creates a new local var with the same name
+    ships = game_map.get_me().all_ships()
+    if len(ships) <= SHIPTHRESHOLD and cornershipID is None:
+        raise NoShipAvailable()
+    if cornershipID is None:
+        for ship in ships:
+            if ship.docking_status != ship.DockingStatus.UNDOCKED:
+                continue
+            cornershipID = ship.id
+            return ship
+        # make sure if all ships are docked we don't exist the loop
+        raise NoShipAvailable()
+    else:
+
+        if game_map.get_me().get_ship(cornershipID) is not None:
+            return game_map.get_me().get_ship(cornershipID)
+        else:
+            cornershipID = None
+            return cornershipfinder()
+    assert False, "We should never be here"
+
+def cornershipmove():
+    ship = cornershipfinder()
+    shippos = np.array([[ship.x, ship.y]])
+    corners = np.array([[0, 0],
+                       [game_map.width, game_map.height],
+                       [0, game_map.height],
+                       [game_map.width, 0]])
+    distances = scipy.spatial.distance.cdist(shippos, corners)
+    index, distance = min(enumerate(distances[0]), key=lambda distance: distance[1])
+    desiredcornerX, desiredcornerY = corners[index]
+    logging.info("X %s Y %s distances %s index %s distance %s", str(desiredcornerX), str(desiredcornerY), str(distances), str(index), str(distance))
+    navigate_command = ship.navigate(
+        ship.closest_point_to(Position(desiredcornerX, desiredcornerY)),
+        game_map,
+        speed=int(hlt.constants.MAX_SPEED),
+        ignore_ships=False, angular_step=8)
+    if navigate_command:
+        assert ship.id == cornershipID, "Ship.id ({}) did not equal cornership ID ({})".format(ship.id, cornershipID) 
+        command_queue.append(navigate_command)
+
+
 while True:
     # TURN START
     # Update the map for the new turn and get the latest version
@@ -119,11 +173,21 @@ while True:
     # statefully generate increasing deflections for obstacle avoidance
     deflections = monotonic_deflections()
 
+    # move the cornership to the corner
+    try:
+        cornershipmove()
+    except NoShipAvailable:
+        pass
 
     # Here we define the set of commands to be sent to the Halite engine at the end of the turn
     command_queue = []
     # For every ship that I control
     ships = game_map.get_me().all_ships() #[:]
+
+    # avoid timeouts
+    if len(ships) >= 600:
+        ships = ships[:-600]
+    
     planets = game_map.all_planets()
 
     all_planet_features_this_round = all_planet_features(planets, game_map.my_id)
@@ -139,7 +203,7 @@ while True:
         target_object = None
         # TODO: Optimally Allocate ships between planets
         # If the ship is docked
-        if ship.docking_status != ship.DockingStatus.UNDOCKED:
+        if ship.docking_status != ship.DockingStatus.UNDOCKED or ship.id == cornershipID:
             # Skip this ship
             continue
 
