@@ -33,11 +33,12 @@ game = hlt.Game("Settler")
 # higher numbers make a planet LESS desirable
 # is_mine and not is_full | is_mine and is_full |  is_others | (0.5 - is_others)*planet.radius | count_in_targets | distance | closer_than_threshold
 PLANET_SCORING_WEIGHTS = np.array([[-50], [2000], [100], [-2], [200], [1], [-50]])
-PLANET_SCORING_WEIGHTS_EARLY = np.array([[-400], [90000], [100], [-50], [-20], [10], [-50]])
+PLANET_SCORING_WEIGHTS_EARLY = np.array([[-800], [90000], [100], [-50], [-20], [10], [-50]])
 
 PARALLELTHRESHOLD = 6
 TOOMANYSHIPS = 100
 EARLYSHIPS = 10
+PARALLELDIST = 4
 
 def planet_weights(ship, planets):
     for planet in planets:
@@ -255,7 +256,8 @@ while True:
                     target_object = planet.all_docked_ships()[0]
 
         ship_targets[ship] = target_object
-        if target_object in target_moves and len(ships) < PARALLELTHRESHOLD:
+        if target_object in target_moves and (len(ships) < PARALLELTHRESHOLD
+                or ship.calculate_relative_distance(target_object) < PARALLELDIST):
             navigate_command = target_moves[target_object][0].with_id(ship.id)
         elif target_object:
             navigate_command = ship.navigate(
@@ -263,7 +265,6 @@ while True:
                 game_map,
                 speed=int(hlt.constants.MAX_SPEED),
                 ignore_ships=False,
-                angle_dodges=None,
                 # this way some ships dodge one way, some the other
                 # angular_step=4*(-1*ship.id%2))
                 angular_step=angle)
