@@ -4,6 +4,8 @@ import math
 from enum import Enum
 from . import constants
 import numpy as np
+import copy
+
 
 
 class Entity(object):
@@ -217,7 +219,28 @@ class Planet(Entity):
 
         return planets, remainder
 
+class Command:
 
+    command_name = ""
+
+    def __init__(self, *params):
+        self.params = list(map(str, params))
+    
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        params = " ".join(self.params)
+        return "{} {}".format(self.command_name, params)
+
+class Thrust(Command):
+    command_name = "t"
+
+    def with_id(self, newid):
+        new = copy.deepcopy(self)
+        new.params[0] = str(newid)
+        return new
+    
 class Ship(Entity):
     """
     A ship in the game.
@@ -264,7 +287,7 @@ class Ship(Entity):
 
         # we want to round angle to nearest integer, but we want to round
         # magnitude down to prevent overshooting and unintended collisions
-        return "t {} {} {}".format(self.id, int(magnitude), round(angle))
+        return Thrust(self.id, int(magnitude), round(angle))
 
     def dock(self, planet):
         """
@@ -317,6 +340,8 @@ class Ship(Entity):
             else Ship if (ignore_ships and not ignore_planets) \
             else Planet if (ignore_planets and not ignore_ships) \
             else Entity
+        # TODO have obstacle calculation ignore ships that are more than speed away
+        # BUT don't ignore planets
         if avoid_obstacles and game_map.obstacles_between(self, target, ignore):
             dodge_angle = math.radians(angle + angular_step) + (
                 next(angle_dodges) if angle_dodges else 0)

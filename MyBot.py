@@ -33,6 +33,11 @@ game = hlt.Game("Settler")
 # higher numbers make a planet LESS desirable
 # is_mine and not is_full | is_mine and is_full |  is_others | (0.5 - is_others)*planet.radius | count_in_targets | distance | closer_than_threshold
 PLANET_SCORING_WEIGHTS = np.array([[-50], [2000], [100], [-2], [200], [1], [-50]])
+PLANET_SCORING_WEIGHTS_EARLY = np.array([[-400], [90000], [100], [-50], [-20], [10], [-50]])
+
+PARALLELTHRESHOLD = 6
+TOOMANYSHIPS = 100
+EARLYSHIPS = 10
 
 def planet_weights(ship, planets):
     for planet in planets:
@@ -98,15 +103,6 @@ def score_all_planets_for_one_ship(ship, planets, planet_features, planet_positi
     return planets[best_idx]
     
 
-def monotonic_deflections(seed=0, deflection_range=math.pi/32):
-    deflection = seed
-    while True:
-        deflection += random.uniform(0, deflection_range)
-        yield deflection
-
-# maps planets -> ships trying to dock on them
-dock_attempts = {}
-
 SHIPTHRESHOLD = 12
 class NoShipAvailable(Exception):
     pass
@@ -120,7 +116,7 @@ def cornershipfinder():
     # if you don't do this then cornershipID creates a new local var with the same name
     ships = game_map.get_me().all_ships()
     if len(ships) <= SHIPTHRESHOLD and cornershipID is None:
-        raise NoShipAvailable()
+        raise NoShipAvailable("Not at threshold")
     if cornershipID is None:
         for ship in ships:
             if ship.docking_status != ship.DockingStatus.UNDOCKED:
@@ -128,7 +124,7 @@ def cornershipfinder():
             cornershipID = ship.id
             return ship
         # make sure if all ships are docked we don't exist the loop
-        raise NoShipAvailable()
+        raise NoShipAvailable("No undocked ship available")
     else:
 
         if game_map.get_me().get_ship(cornershipID) is not None:
@@ -148,7 +144,7 @@ def cornershipmove():
     distances = scipy.spatial.distance.cdist(shippos, corners)
     index, distance = min(enumerate(distances[0]), key=lambda distance: distance[1])
     desiredcornerX, desiredcornerY = corners[index]
-    logging.info("X %s Y %s distances %s index %s distance %s", str(desiredcornerX), str(desiredcornerY), str(distances), str(index), str(distance))
+    #logging.info("X %s Y %s distances %s index %s distance %s", str(desiredcornerX), str(desiredcornerY), str(distances), str(index), str(distance))
     navigate_command = ship.navigate(
         ship.closest_point_to(Position(desiredcornerX, desiredcornerY)),
         game_map,
@@ -156,11 +152,12 @@ def cornershipmove():
         ignore_ships=False, angular_step=8)
     if navigate_command:
         assert ship.id == cornershipID, "Ship.id ({}) did not equal cornership ID ({})".format(ship.id, cornershipID) 
-        command_queue.append(navigate_command)
+        command_queue.append(str(navigate_command))
 
-
+turn_number = 0
 while True:
     # TURN START
+    turn_number += 1
     # Update the map for the new turn and get the latest version
     game_map = game.update_map()
     # make changes to reflect what we intend to do
@@ -170,23 +167,36 @@ while True:
     # maps ships -> targets
     ship_targets = {}
 
-    # statefully generate increasing deflections for obstacle avoidance
-    deflections = monotonic_deflections()
-
-    # move the cornership to the corner
-    try:
-        cornershipmove()
-    except NoShipAvailable:
-        pass
-
+    # maps targets -> moves
+    target_moves = collections.defaultdict(list)
+    
     # Here we define the set of commands to be sent to the Halite engine at the end of the turn
     command_queue = []
+    
+    # move the cornership to the corner
+    try:
+        if len(game_map.all_players()) > 2:
+            cornershipmove()
+    except NoShipAvailable as e:
+        logging.info(str(e))
+
+
     # For every ship that I control
     ships = game_map.get_me().all_ships() #[:]
 
+    #assert len(ships) >= 3
+    
     # avoid timeouts
-    if len(ships) >= 600:
-        ships = ships[:-600]
+    if len(ships) >= TOOMANYSHIPS:
+        ships = ships[:-TOOMANYSHIPS]
+
+    # avoid crashing into each other at the start of the game
+    if turn_number == 1:
+        ships = list(sorted(ships, key=lambda s: (s.y,s.x)))
+
+    weights = PLANET_SCORING_WEIGHTS
+    if len(ships) < EARLYSHIPS:
+        weights = PLANET_SCORING_WEIGHTS_EARLY
     
     planets = game_map.all_planets()
 
@@ -197,9 +207,11 @@ while True:
         nearby_enemy_ships = enemy_ships.check_enemy_distances(ships, game_map.all_ships())
     except ValueError:
         nearby_enemy_ships = {}
+
+    # half of ships dodge one way, half the other
+    ship_angles = (((np.array([ship.id for ship in ships]) % 2) * 2) - 1) * 4
         
-    # random.shuffle(ships)
-    for ship in ships:
+    for angle, ship in zip(ship_angles, ships):
         target_object = None
         # TODO: Optimally Allocate ships between planets
         # If the ship is docked
@@ -211,7 +223,8 @@ while True:
         if ship in nearby_enemy_ships and len(nearby_enemy_ships[ship]) > 0:
             target_object = nearby_enemy_ships[ship][0]
         else:
-            planet = score_all_planets_for_one_ship(ship, planets, all_planet_features_this_round, planet_positions, ship_targets)
+            planet = score_all_planets_for_one_ship(
+                ship, planets, all_planet_features_this_round, planet_positions, ship_targets, weights=weights)
             # logging.debug("Processing planet {}".format(n))
             # If we can dock, let's (try to) dock. If two ships try to dock at once, neither will be able to.
             if (
@@ -221,7 +234,6 @@ while True:
                     not (planet.is_owned() and planet.owner != ship.owner) and
                     not (planet.is_owned() and planet.owner == ship.owner and planet.is_full())):  # TODO: Don't have our own ships conflict each other
                 # We add the command by appending it to the command_queue
-                # dock_attempts[planet] = ship
                 command_queue.append(ship.dock(planet))
                 target_object = ship
                 continue
@@ -243,19 +255,25 @@ while True:
                     target_object = planet.all_docked_ships()[0]
 
         ship_targets[ship] = target_object
-        if target_object:
+        if target_object in target_moves and len(ships) < PARALLELTHRESHOLD:
+            navigate_command = target_moves[target_object][0].with_id(ship.id)
+        elif target_object:
             navigate_command = ship.navigate(
                 ship.closest_point_to(target_object),
                 game_map,
                 speed=int(hlt.constants.MAX_SPEED),
                 ignore_ships=False,
                 angle_dodges=None,
-                angular_step=8)
+                # this way some ships dodge one way, some the other
+                # angular_step=4*(-1*ship.id%2))
+                angular_step=angle)
+            if navigate_command:
+                target_moves[target_object].append(navigate_command)
         # If the move is possible, add it to the command_queue (if there are too many obstacles on the way
         # or we are trapped (or we reached our destination!), navigate_command will return null;
         # don't fret though, we can run the command again the next turn)
         if navigate_command:
-            command_queue.append(navigate_command)
+            command_queue.append(str(navigate_command))
         # logging.debug("Processed all planets for ship {}".format(ship))
     # Send our set of commands to the Halite engine for this turn
     game.send_command_queue(command_queue)
